@@ -149,7 +149,7 @@ public:
 			this->color = WHITE;
 		}
 		else if (temperature >= 10000) {
-			this->color = { 0, 220, 255};
+			this->color = { 0, 220, 255 };
 		}
 		else if (temperature >= 30000) {
 			this->color = BLUE;
@@ -204,13 +204,69 @@ public:
 	}
 };
 
+class Orbit {
+
+private:
+	float radius;
+	Vector2 center;
+	Vector2 position;
+	float mass;
+	float distance;
+	Color color;
+	Planet* planet;
+	float speed;
+	float angle = 0;
+public:
+
+	Orbit(float radius, float mass, float distance, Color color, Planet* pointer) {
+		if (pointer == nullptr) {
+			std::cout << "Fatal error: pointer if nullptr";
+			getchar();
+			abort();
+		}
+		this->planet = pointer;
+		this->radius = radius;
+		this->center = pointer->GetPosition();
+		this->mass = mass;
+		this->distance = distance;
+		this->color = color;
+		this->position.x = this->center.x;
+		this->position.y = this->center.y + this->planet->GetRadius() + this->radius + this->distance;
+	}
+	Vector2 GetPosition() {
+		return this->position;
+	}
+	float GetRadius() {
+		return this->radius;
+	}
+	float GetDistance() {
+		return this->distance;
+	}
+	Color GetColor() {
+		return this->color;
+	}
+	void Gravity_init() {
+		float D = sqrt((planet->GetPosition().x - this->position.x) * (planet->GetPosition().x - this->position.x) + (planet->GetPosition().y - this->position.y) * (planet->GetPosition().y - this->position.y));
+		float F = gravity * this->mass * this->planet->GetMass() / (D * D);
+		float Radius = this->distance + this->radius + planet->GetRadius();
+		angle += F * GetFrameTime();
+		this->position.x = planet->GetPosition().x + cosf(angle) * Radius;
+		this->position.y = planet->GetPosition().y + sinf(angle) * Radius;
+	}
+	
+};
+
 Center sun({ 320, 360 }, 30, YELLOW, 10000);
 
 std::vector<Object>Objects;
 std::vector<Planet>Planets;
+std::vector<Orbit>Orbits;
 
 void CreateObject(Vector2 vec, float w, float h, Color color, float m) {
 	Objects.emplace_back(vec, w, h, color, m);
+}
+void CreateOrbit(float radius, float mass, float distance, Color color, Planet* pointer) {
+	Orbits.emplace_back(radius, mass, distance, color, pointer);
 }
 
 void Draw_Objects() {
@@ -239,14 +295,14 @@ void CreateMoreObjects(int i, Camera2D* cam) {
 	if (i == 0) return;
 	Vector2 vec = GetMousePosition();
 	Vector2 World = GetScreenToWorld2D(vec, *cam);
-	CreateObject({World.x + (5 * i), World.y + (5 * i)}, 3, 3, WHITE, 100);
+	CreateObject({ World.x + (5 * i), World.y + (5 * i) }, 3, 3, WHITE, 100);
 	CreateMoreObjects(i - 1, cam);
 }
 void CreateMoreMoreObjects(int i, Camera2D* cam) {
 	if (i == 0) return;
 	Vector2 vec = GetMousePosition();
 	Vector2 World = GetScreenToWorld2D(vec, *cam);
-	CreateObject({World.x / 2, World.y / 2 }, 3, 3, WHITE, 100);
+	CreateObject({ World.x / 2, World.y / 2 }, 3, 3, WHITE, 100);
 	CreateMoreObjects(i - 1, cam);
 }
 
@@ -256,6 +312,7 @@ void CreateMoreMoreMoreObjects(int i, Camera2D* cam) {
 	Vector2 World = GetScreenToWorld2D(vec, *cam);
 	CreateObject({ World.x / 4096, World.y / 4096 }, 3, 3, WHITE, 100);
 	CreateMoreObjects(i - 1, cam);
+	
 }
 
 int CreatePlanet(Vector2 pos, float radius, float mass, float temperature) {
@@ -264,12 +321,16 @@ int CreatePlanet(Vector2 pos, float radius, float mass, float temperature) {
 }
 
 float zoom = 1;
-float speed = 1;
+float speed = 10;
 float dx, dy;
 
 void RenderPlanets() {
 	for (auto& p : Planets) {
 		DrawCircle(p.GetPosition().x, p.GetPosition().y, p.GetRadius(), p.GetColor());
+		for (auto& o : Orbits) {
+			DrawCircle(o.GetPosition().x, o.GetPosition().y, o.GetRadius(), o.GetColor());
+			o.Gravity_init();
+		}
 	}
 }
 
@@ -278,31 +339,32 @@ int main() {
 	InitWindow(640, 720, "Space Sandbox");
 
 	SetTargetFPS(60);
-	
+
 	Camera2D camera = { 0 };
 	camera.target = sun.GetPos();
 	//camera.zoom = 1;
 	camera.offset = { 640 / 2, 720 / 2 };
 
-	CreatePlanet({ 11000, 200 }, 10000, 500000, 4000);
+	int first_planet = CreatePlanet({ 11000, 200 }, 10000, 5000000, 4000);
+	CreateOrbit(2000, 4000, 8000, RED, &Planets[first_planet]);
 
 	while (!WindowShouldClose()) {
 		Vector2 vec = GetMousePosition();
 		Vector2 worldPos = GetScreenToWorld2D(vec, camera);
 		if (IsKeyDown(KEY_UP)) {
-			dy = -10;
+			dy = -speed;
 		}
 		else if (IsKeyDown(KEY_DOWN)) {
-			dy = 10;
+			dy = speed;
 		}
 		else {
 			dy = 0;
 		}
 		if (IsKeyDown(KEY_RIGHT)) {
-			dx = 10;
+			dx = speed;
 		}
 		else if (IsKeyDown(KEY_LEFT)) {
-			dx = -10;
+			dx = -speed;
 		}
 		else {
 			dx = 0;
@@ -310,15 +372,15 @@ int main() {
 		sun.Move(dx, dy);
 		camera.target = sun.GetPos();
 		if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-			
+
 			CreateObject(worldPos, 3, 3, WHITE, 100);
 		}
 		if (IsKeyDown(KEY_Q)) {
-			
+
 			CreateMoreObjects(10, &camera);
 		}
 		if (IsKeyDown(KEY_E)) {
-			
+
 			CreateMoreMoreObjects(100, &camera);
 		}
 		if (IsKeyDown(KEY_T)) {
@@ -327,7 +389,7 @@ int main() {
 		if (IsKeyDown(KEY_C)) {
 			Objects.clear();
 		}
-		
+
 		if (IsKeyDown(KEY_O)) {
 			zoom -= 0.01;
 			if (zoom < 0.1) {
@@ -343,30 +405,36 @@ int main() {
 				zoom += 0.0001;
 			}
 		}
+		if (IsKeyDown(KEY_Z)) {
+			speed = 100;
+		}
+		else {
+			speed = 10;
+		}
 
 		camera.zoom = zoom;
 
-		
+
 
 		BeginDrawing();
 
 
 		ClearBackground(BLACK);
-		
+
 		BeginMode2D(camera);
 		Gravity_init();
 		Draw_Objects();
 		DrawCircle(sun.GetPos().x, sun.GetPos().y, sun.GetRadius(), sun.GetColor());
 		RenderPlanets();
 		EndMode2D();
-		
-		
-		
+
+
+
 		float planets = Objects.size();
 		std::string message = "Objects: " + std::to_string(planets) + "\nX: " + std::to_string(sun.GetPos().x) + "\tY: " + std::to_string(sun.GetPos().y);
-		
+
 		DrawText(message.c_str(), 20, 20, 32, RED);
-		
+
 		EndDrawing();
 	}
 }
